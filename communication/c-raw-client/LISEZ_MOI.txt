@@ -1,0 +1,187 @@
+
+ ****************
+ **  How to    **
+ ****************
+
+ **
+ 1. compiler le programme (cmake, make), le sample tourne sur un Linux, 
+    testé sur Ubuntu 14.04.
+    Le sample peut poser des problèmes de compilation sur Windows,
+    il faudra adapter les inclusions liées aux appels systèmes
+    réseau (connect, socket, ...).
+ 
+ **
+ 2. créer dans l'éditeur de scénarios, un scénario avec une interface TCP 
+       - en mode Serveur
+       - en attente de connexion sur le port 3001 (*)
+       - avec protocole Raw
+
+ **
+ 3. générer le scénario
+ 
+ **
+ 4. lancer la simulation (la simulation doit toujours être lancée 
+       avant le bout de code).
+ 
+ **
+ 5. lancer le programme fourni avec pour arguments:
+     argument 1 : adresse ip  de l'unité de simulation
+     argument 2 : port d'écoute de l'interface TCP (3001) (*)
+     (lancer le programme sans argument pour voir l'utilisation)
+ 
+ **
+ 6. le programme exécute un callback à chaque réception de trame Raw
+      le callback exemple qui est fourni affiche le TimeStamp simulation,
+      ainsi que les données de e0
+      
+      Les trames Raw ont toujours :
+       l'entrée TimeStamp qui renvoie le nombre de secondes écoulées depuis
+       le lancement de la simulation
+       
+       des entrées sur la date de simulation (paramétrée au préalable
+       dans l'éditeur)
+       
+      C'est l'entrée TimeStamp qui va vous intéresser pour synchroniser
+      vos data.
+      
+      Pour aller plus loin, vous pouvez écrire votre propre fonction
+      callback.
+      
+      Si vous branchez les sorties d'IMU vers Raw, la fréquence
+      d'émission de paquets sera égale à la fréquence paramétrée sur
+      l'IMU simulateur.
+
+
+  *****************************
+  ** Fonctionnement général  **
+  *****************************
+  
+     le bout de code :
+      - créé une banale socket TCP 
+      - se connecte avec cette socket TCP au simulateur
+      - si la connection réussit (si le simulateur répond),
+        le programme exécute une boucle de réception
+        de data sur la socket, et à chaque décodage d'un paquet Raw,
+        exécute le callback setté dans ginfo.packetDecodeCallback.
+        
+        Le simulateur envoie un paquet Raw au client dès qu'une nouvelle
+        donnée est calculée dans les valeurs 'ei' que vous avez
+        connecté sur le graphe de blocs logiques de l'éditeur.
+
+   **
+      Le bout de code doit compiler et tourner s'il est testé directement
+      sur l'unité de simulation. Sous réserve de configuration réseau
+      correcte, il tournera aussi sur une machine distante.
+       
+   ** 
+      Le bout de code fourni peut être ré-exploité sans limitation
+       de droits, le bout de code fourni est publié sans restriction
+       aux utilisateurs du simulateur qui en font la demande.
+       
+
+   ** 
+      Pour vérifier ce que le simulateur vous envoie
+       en mode serveur, abusez de netcat sur l'unité de simulation :
+        $       nc 127.0.0.1 3001
+        
+        
+   
+   ***************************************
+   ** Plus d'infos sur le protocole Raw **
+   ***************************************
+   
+   Le protocole Raw est un protocole interne à 4D-Virtualiz, créé pour extraire
+   des données depuis le simulateur, sous un format unifié.
+   
+    Exemple de Paquet Raw 
+    
+    #######################################
+    Notes :   ' ' (white space) : espace (0x20)
+              '[LF]' : retour à la ligne '\n' (0x0a) 
+    
+    TimeStamp 1 double 1288.031[LF]      (*)
+    Day 1 int16_t 1[LF]                  (*)
+    Frequency 1 double 0[LF]             (*)
+    Hour 1 int16_t 12[LF]                (*)
+    Latency 1 double 0[LF]               (*)
+    Minute 1 int16_t 21[LF]              (*)
+    Month 1 int16_t 1[LF]                (*)
+    Second 1 double 28.031[LF]           (*)
+    Year 1 int16_t 2015[LF]              (*)
+    e0 1 double -0.3321164846[LF]
+    e1 1 double 0.7483924627[LF]
+    e2 1 double 27.07112885[LF]
+    e3 1 double 0.002659119433[LF]
+    e4 1 double 0.001042146003[LF]
+    e5 1 double -2.157377139e-07[LF]
+    [LF]                                 
+    ######################################
+    
+    
+    Les entrées marquées de (*) sont toujours présentes dans une trame Raw.
+    Si vous ne disposez pas de l'entrée, et que vous en avez besoin pour
+    restituer la date simulation, merci de bien vouloir mettre à jour l'unité.
+    
+    TimeStamp     Nombre de secondes écoulées depuis le début de la simulation.
+                  Le nombre envoyé correspond à la date d'acquisition des données
+                  dans le simulateur.
+    
+    
+    * Une entrée d'un paquet Raw se termine par le caractère '\n' (retour à la ligne, LF 0x0a).
+    
+    * Exemple d'entrée Raw à valeur unique :
+    
+        e0 1 double -0.3321164846[LF]
+        ^  ^ ^      ^            ^
+        1  2 3      4            5
+       
+        1:      nom de l'entrée : chaîne alphanumérique sans espaces
+        2:      longueur du tableau de valeurs (ici '1')
+        3:      type de l'entrée, parmi 'double', 'int16_t', et bien d'autres
+        4:      tableau de valeurs, les valeurs sont exprimées en ASCII
+        5:      '\n' terminal
+    
+    
+    * Exemple d'entrée Raw à valeurs multiples :
+    
+        e0 2 double -0.3321164846 0.4554781[LF]
+        ^  ^ ^      ^             ^         ^
+        1  2 3      4             5         6
+        
+        Les valeurs sont séparées par un caractère ' ' (whitespace, 0x20).
+        La dernière valeur prend fin à l'apparition du premier '\n'.
+            
+             
+    * Un paquet Raw se termine par un caractère extra '\n'.
+      Donc la dernière entrée d'un paquet Raw se termine par deux '\n' successifs, soit
+         "\n\n", séquence d'octets  { 0x0A, 0x0A }. Les deux LF successifs sont
+         immédiatement suivis par les données du paquet suivant.
+       
+  ***************************************
+  ** Limitations connues du programme  **
+  ***************************************
+  
+     le programme client fonctionnera tant que les utilisations du protocole Raw
+     restent basiques :
+       - nombre d'entrées maximum par paquet Raw : 32
+          (sur un Raw de base vous avez e0 - e5, vous ne dépasserez jamais 20)
+       - longueur maximum de nom d'une entrée : 256
+       - longueur maximum de type d'une entrée : 256
+       * longueur maximum du tableau de valeurs d'une entrée : 64
+          => attention si vous envoyez des vecteurs / tableaux de données
+       - longueur maximum d'une seule valeur : 256
+       * nombre de paquets parsés et décodés sur la même
+         itération de lecture socket : 256
+         => ce nombre peut poser problème si le callback ajouté
+         est très gourmand en CPU. Notez que le callback ne doit
+         pas réaliser d'opérations bloquantes pour garantir l'efficacité
+         de la routine de réception.
+       - taille du buffer de lecture socket : 4096
+       
+     - l'adresse fournie en argument 1 du programme doit être de type IPv4
+     
+     - le programme a été optimisé pour faire tourner efficacement sa callback
+       sur Linux Ubuntu 14.04 x86_64. L'auteur du programme ne garantit pas des performances
+       similaires sur un environnement différent.
+
+
